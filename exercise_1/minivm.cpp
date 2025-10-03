@@ -107,6 +107,12 @@ static void handler_add(VMContext& ctx)
     dst       = op1 + op2;
 }
 
+static void handler_inc(VMContext& ctx)
+{
+    auto& dst = ctx.op_reg();
+    dst += 1;
+}
+
 static void handler_movimm(VMContext& ctx)
 {
     auto& dst = ctx.op_reg();
@@ -129,6 +135,12 @@ static void handler_jcc(VMContext& ctx)
     {
         ctx.pc = ctx.labels[label];
     }
+}
+
+static void handler_jn(VMContext& ctx)
+{
+    auto label = ctx.fetch();
+    ctx.pc     = ctx.labels[label];
 }
 
 static void handler_xor(VMContext& ctx)
@@ -183,6 +195,8 @@ static void handler_mul(VMContext& ctx)
 #define XOR(dst, op1, op2)       OPCODE(6), dst, op1, op2
 #define OR(dst, op1, op2)        OPCODE(7), dst, op1, op2
 #define MUL(dst, op1, op2)       OPCODE(8), dst, op1, op2
+#define JN(label)                OPCODE(9), label
+#define INC(dst)                 OPCODE(10), dst
 
 /*
 constexpr uint8_t bytecode1[] = {
@@ -197,12 +211,47 @@ constexpr uint8_t bytecode1[] = {
 };
 */
 
+/*
+// return a == 42 ? 1337 : 0
+constexpr uint8_t bytecode1[] = {
+    MOVIMM(REG(254), 42),
+    CMP(REG(255), REG(0), REG(254)),
+    JCC(REG(255), 0), // jumps to LABEL_PLACEHOLDER(0) if REG(255) != 0
+    MOVIMM(REG(254), 0),
+    RET(REG(254)),
+    LABEL_PLACEHOLDER(0),
+    MOVIMM(REG(254), 1337),
+    RET(REG(254)),
+};
+*/
+
+// fib(n) = fib(n-1) + fib(n-2)
+constexpr uint8_t bytecode1[] = {
+    MOVIMM(REG(100), 0),
+    MOVIMM(REG(101), 1),
+    MOVIMM(REG(102), 2),
+    MOVIMM(REG(11), 3),
+    LABEL_PLACEHOLDER(0),
+    CMP(REG(255), REG(11), REG(0)),
+    JCC(REG(255), 1),
+    ADD(REG(103), REG(101), REG(102)),
+    ADD(REG(101), REG(102), REG(100)),
+    ADD(REG(102), REG(103), REG(100)),
+    INC(REG(11)),
+    JN(0),
+    LABEL_PLACEHOLDER(1),
+    RET(REG(102)),
+};
+
+/*
+// Original
 constexpr uint8_t bytecode1[] = {
     OR(REG(4), REG(0), REG(1)),
     XOR(REG(5), REG(2), REG(3)),
     ADD(REG(6), REG(4), REG(5)),
     RET(REG(6)),
 };
+*/
 
 constexpr static VMLabels labels1 = VMLabels(bytecode1);
 
@@ -256,6 +305,12 @@ static __attribute__((optnone)) uint64_t execute_bytecode(
             break;
         case 8:
             handler_mul(ctx);
+            break;
+        case 9:
+            handler_jn(ctx);
+            break;
+        case 10:
+            handler_inc(ctx);
             break;
         default:
             __builtin_unreachable();
